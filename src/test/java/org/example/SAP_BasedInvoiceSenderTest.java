@@ -6,6 +6,7 @@ import org.mockito.Mockito;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 class SAP_BasedInvoiceSenderTest {
@@ -50,5 +51,36 @@ class SAP_BasedInvoiceSenderTest {
 
         // Assert: verify no SAP sends happen
         verify(sap, never()).send(any());
+    }
+
+    @Test
+    @DisplayName("Returns failed invoices when SAP throws exception")
+    void testThrowExceptionWhenBadInvoice() {
+        // Arrange
+        FilterInvoice filter = Mockito.mock(FilterInvoice.class);
+        SAP sap = Mockito.mock(SAP.class);
+
+        Invoice bad = new Invoice("Bad", 20);
+        Invoice good = new Invoice("Good", 10);
+
+        // Stub filter to return two invoices
+        when(filter.lowValueInvoices()).thenReturn(List.of(bad, good));
+
+        // Make SAP throw an exception for the BAD invoice
+        doThrow(new RuntimeException("SAP Error"))
+                .when(sap).send(bad);
+
+        SAP_BasedInvoiceSender sender = new SAP_BasedInvoiceSender(filter, sap);
+
+        // Act
+        List<Invoice> failed = sender.sendLowValuedInvoices();
+
+        // Assert
+        assertEquals(1, failed.size());
+        assertEquals(bad, failed.get(0));
+
+        // And verify SAP still attempted to send both invoices
+        verify(sap, times(1)).send(bad);
+        verify(sap, times(1)).send(good);
     }
 }
